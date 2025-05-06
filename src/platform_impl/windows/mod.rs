@@ -112,7 +112,7 @@ impl GlobalHotKeyManager {
             }
             _ => {
                 return Err(crate::Error::FailedToRegister(format!(
-                    "Unable to register hotkey (unknown VKCode for this key: {}).",
+                    "Unknown VKCode for {}",
                     hotkey.key
                 )))
             }

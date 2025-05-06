@@ -13,7 +13,7 @@ use x11rb::protocol::{xkb, ErrorKind, Event};
 use x11rb::rust_connection::RustConnection;
 use xkeysym::RawKeysym;
 
-use crate::{hotkey::HotKey, GlobalHotKeyEvent};
+use crate::{hotkey::HotKey, Error, GlobalHotKeyEvent};
 
 enum ThreadMessage {
     RegisterHotKey(HotKey, Sender<crate::Result<()>>),
@@ -123,19 +123,19 @@ fn register_hotkey(
     );
 
     let Some(key) = key else {
-        return Err(registration_error(
-            &hotkey,
-            format!("unknown scancode for key: {}", hotkey.key),
-        ));
+        return Err(Error::FailedToRegister(format!(
+            "Unknown scancode for key: {}",
+            hotkey.key
+        )));
     };
 
-    let keycode = keysym_to_keycode(conn, key).map_err(|err| registration_error(&hotkey, err))?;
+    let keycode = keysym_to_keycode(conn, key).map_err(|err| Error::FailedToRegister(err))?;
 
     let Some(keycode) = keycode else {
-        return Err(registration_error(
-            &hotkey,
-            format!("unable to find keycode for key: {}", hotkey.key),
-        ));
+        return Err(Error::FailedToRegister(format!(
+            "Unable to find keycode for key: {}",
+            hotkey.key
+        )));
     };
 
     for m in ignored_mods() {
@@ -148,13 +148,11 @@ fn register_hotkey(
                 GrabMode::ASYNC,
                 GrabMode::ASYNC,
             )
-            .map_err(|err| registration_error(&hotkey, format!("{}", err)))?;
+            .map_err(|err| Error::FailedToRegister(err.to_string()))?;
 
         if let Err(err) = result.check() {
             return match err {
-                ReplyError::ConnectionError(err) => {
-                    Err(registration_error(&hotkey, format!("{}", err)))
-                }
+                ReplyError::ConnectionError(err) => Err(Error::FailedToRegister(err.to_string())),
                 ReplyError::X11Error(err) => {
                     if let ErrorKind::Access = err.error_kind {
                         for m in ignored_mods() {
@@ -163,9 +161,9 @@ fn register_hotkey(
                             }
                         }
 
-                        Err(crate::Error::AlreadyRegistered(hotkey))
+                        Err(Error::AlreadyRegistered(hotkey))
                     } else {
-                        Err(registration_error(&hotkey, format!("{:?}", err)))
+                        Err(Error::FailedToRegister(format!("{err:?}")))
                     }
                 }
             };
@@ -178,7 +176,7 @@ fn register_hotkey(
             entry.push((hotkey.id(), modifiers, false));
             Ok(())
         }
-        Some(_) => Err(crate::Error::AlreadyRegistered(hotkey)),
+        Some(_) => Err(Error::AlreadyRegistered(hotkey)),
     }
 }
 
@@ -195,14 +193,13 @@ fn unregister_hotkey(
     );
 
     let Some(key) = key else {
-        return Err(crate::Error::FailedToUnRegister(hotkey));
+        return Err(Error::FailedToUnRegister(hotkey));
     };
 
-    let keycode =
-        keysym_to_keycode(conn, key).map_err(|_err| crate::Error::FailedToUnRegister(hotkey))?;
+    let keycode = keysym_to_keycode(conn, key).map_err(|_err| Error::FailedToUnRegister(hotkey))?;
 
     let Some(keycode) = keycode else {
-        return Err(crate::Error::FailedToUnRegister(hotkey));
+        return Err(Error::FailedToUnRegister(hotkey));
     };
 
     for m in ignored_mods() {
@@ -473,9 +470,9 @@ fn keysym_to_keycode(conn: &RustConnection, keysym: RawKeysym) -> Result<Option<
 
     let mapping = conn
         .get_keyboard_mapping(min_keycode, count)
-        .map_err(|err| format!("{}", err))?
+        .map_err(|err| err.to_string())?
         .reply()
-        .map_err(|err| format!("{}", err))?;
+        .map_err(|err| err.to_string())?;
 
     let keysyms_per_keycode = mapping.keysyms_per_keycode as usize;
 
@@ -486,11 +483,4 @@ fn keysym_to_keycode(conn: &RustConnection, keysym: RawKeysym) -> Result<Option<
     }
 
     Ok(None)
-}
-
-fn registration_error(hotkey: &HotKey, detail: String) -> crate::Error {
-    crate::Error::FailedToRegister(format!(
-        "Unable to register hotkey: {} - {}",
-        hotkey, detail
-    ))
 }

@@ -20,7 +20,7 @@ pub enum Error {
     EmptyHotKeyToken(String),
     #[error("Unexpected hotkey string format: \"{0}\", a hotkey should have the modifiers first and only contain one main key")]
     UnexpectedHotKeyFormat(String),
-    #[error("{0}")]
+    #[error("Unable to register hotkey: {0}")]
     FailedToRegister(String),
     #[error("Failed to unregister hotkey: {0:?}")]
     FailedToUnRegister(HotKey),

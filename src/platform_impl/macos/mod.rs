@@ -124,7 +124,7 @@ impl GlobalHotKeyManager {
 
                 if result != noErr as _ {
                     return Err(crate::Error::FailedToRegister(format!(
-                        "Unable to register hotkey: {}",
+                        "RegisterEventHotKey failed for {}",
                         hotkey.key
                     )));
                 }
@@ -147,7 +147,7 @@ impl GlobalHotKeyManager {
             self.start_watching_media_keys()
         } else {
             Err(crate::Error::FailedToRegister(format!(
-                "Unable to register accelerator (unknown scancode for this key: {}).",
+                "Unknown scancode for {}",
                 hotkey.key
             )))
         }
