@@ -129,7 +129,7 @@ fn register_hotkey(
         )));
     };
 
-    let keycode = keysym_to_keycode(conn, key).map_err(|err| Error::FailedToRegister(err))?;
+    let keycode = keysym_to_keycode(conn, key).map_err(Error::FailedToRegister)?;
 
     let Some(keycode) = keycode else {
         return Err(Error::FailedToRegister(format!(
