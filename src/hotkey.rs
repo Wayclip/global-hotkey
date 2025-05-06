@@ -94,7 +94,7 @@ impl HotKey {
         Self {
             mods,
             key,
-            id: mods.bits() << 16 | key as u32,
+            id: (mods.bits() << 16) | key as u32,
         }
     }
 

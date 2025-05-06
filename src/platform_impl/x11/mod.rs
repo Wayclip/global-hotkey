@@ -114,10 +114,10 @@ fn ignored_mods() -> [ModMask; 4] {
 fn register_hotkey(
     conn: &RustConnection,
     root: Window,
-    hotkeys: &mut BTreeMap<Keycode, Vec<(u32, ModMask, bool)>>,
+    hotkeys: &mut BTreeMap<Keycode, Vec<HotKeyState>>,
     hotkey: HotKey,
 ) -> crate::Result<()> {
-    let (modifiers, key) = (
+    let (mods, key) = (
         modifiers_to_x11_mods(hotkey.mods),
         keycode_to_x11_keysym(hotkey.key),
     );
@@ -143,7 +143,7 @@ fn register_hotkey(
             .grab_key(
                 false,
                 root,
-                modifiers | m,
+                mods | m,
                 keycode,
                 GrabMode::ASYNC,
                 GrabMode::ASYNC,
@@ -156,7 +156,7 @@ fn register_hotkey(
                 ReplyError::X11Error(err) => {
                     if let ErrorKind::Access = err.error_kind {
                         for m in ignored_mods() {
-                            if let Ok(result) = conn.ungrab_key(keycode, root, modifiers | m) {
+                            if let Ok(result) = conn.ungrab_key(keycode, root, mods | m) {
                                 result.ignore_error();
                             }
                         }
@@ -171,9 +171,14 @@ fn register_hotkey(
     }
 
     let entry = hotkeys.entry(keycode).or_default();
-    match entry.iter().find(|e| e.1 == modifiers) {
+    match entry.iter().find(|e| e.mods == mods) {
         None => {
-            entry.push((hotkey.id(), modifiers, false));
+            let state = HotKeyState {
+                id: hotkey.id(),
+                mods,
+                pressed: false,
+            };
+            entry.push(state);
             Ok(())
         }
         Some(_) => Err(Error::AlreadyRegistered(hotkey)),
@@ -184,7 +189,7 @@ fn register_hotkey(
 fn unregister_hotkey(
     conn: &RustConnection,
     root: Window,
-    hotkeys: &mut BTreeMap<Keycode, Vec<(u32, ModMask, bool)>>,
+    hotkeys: &mut BTreeMap<Keycode, Vec<HotKeyState>>,
     hotkey: HotKey,
 ) -> crate::Result<()> {
     let (modifiers, key) = (
@@ -209,13 +214,18 @@ fn unregister_hotkey(
     }
 
     let entry = hotkeys.entry(keycode).or_default();
-    entry.retain(|k| k.1 != modifiers);
+    entry.retain(|k| k.mods != modifiers);
     Ok(())
 }
 
+struct HotKeyState {
+    id: u32,
+    pressed: bool,
+    mods: ModMask,
+}
+
 fn events_processor(thread_rx: Receiver<ThreadMessage>) -> Result<(), String> {
-    //                           key           id,  mods,    pressed
-    let mut hotkeys = BTreeMap::<Keycode, Vec<(u32, ModMask, bool)>>::new();
+    let mut hotkeys = BTreeMap::<Keycode, Vec<HotKeyState>>::new();
 
     let (conn, screen) = RustConnection::connect(None)
         .map_err(|err| format!("Unable to open x11 connection, maybe you are not running under X11? Other window systems on Linux are not supported by `global-hotkey` crate: {}", err))?;
@@ -273,13 +283,13 @@ fn events_processor(thread_rx: Receiver<ThreadMessage>) -> Result<(), String> {
                     let event_mods = ModMask::from(event_mods.bits());
 
                     if let Some(entry) = hotkeys.get_mut(&keycode) {
-                        for (id, mods, pressed) in entry {
-                            if event_mods == *mods && !*pressed {
+                        for state in entry {
+                            if event_mods == state.mods && !state.pressed {
                                 GlobalHotKeyEvent::send(GlobalHotKeyEvent {
-                                    id: *id,
+                                    id: state.id,
                                     state: crate::HotKeyState::Pressed,
                                 });
-                                *pressed = true;
+                                state.pressed = true;
                             }
                         }
                     }
@@ -288,13 +298,13 @@ fn events_processor(thread_rx: Receiver<ThreadMessage>) -> Result<(), String> {
                     let keycode = event.detail;
 
                     if let Some(entry) = hotkeys.get_mut(&keycode) {
-                        for (id, _, pressed) in entry {
-                            if *pressed {
+                        for state in entry {
+                            if state.pressed {
                                 GlobalHotKeyEvent::send(GlobalHotKeyEvent {
-                                    id: *id,
+                                    id: state.id,
                                     state: crate::HotKeyState::Released,
                                 });
-                                *pressed = false;
+                                state.pressed = false;
                             }
                         }
                     }
