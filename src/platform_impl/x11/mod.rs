@@ -228,22 +228,12 @@ fn events_processor(thread_rx: Receiver<ThreadMessage>) -> Result<(), String> {
     let mut hotkeys = BTreeMap::<Keycode, Vec<HotKeyState>>::new();
 
     let (conn, screen) = RustConnection::connect(None)
-        .map_err(|err| format!("Unable to open x11 connection, maybe you are not running under X11? Other window systems on Linux are not supported by `global-hotkey` crate: {}", err))?;
+        .map_err(|err| format!("Unable to open x11 connection, maybe you are not running under X11? Other window systems on Linux are not supported by `global-hotkey` crate: {err}"))?;
 
     xkb::ConnectionExt::xkb_use_extension(&conn, 1, 0)
-        .map_err(|err| {
-            format!(
-                "Unable to send xkb_use_extension request to x11 server: {}",
-                err
-            )
-        })?
+        .map_err(|err| format!("Unable to send xkb_use_extension request to x11 server: {err}"))?
         .reply()
-        .map_err(|err| {
-            format!(
-                "xkb_use_extension request to x11 server has failed: {}",
-                err
-            )
-        })?;
+        .map_err(|err| format!("xkb_use_extension request to x11 server has failed: {err}"))?;
 
     xkb::ConnectionExt::xkb_per_client_flags(
         &conn,
@@ -254,19 +244,9 @@ fn events_processor(thread_rx: Receiver<ThreadMessage>) -> Result<(), String> {
         Default::default(),
         Default::default(),
     )
-    .map_err(|err| {
-        format!(
-            "Unable to send xkb_per_client_flags request to x11 server: {}",
-            err
-        )
-    })?
+    .map_err(|err| format!("Unable to send xkb_per_client_flags request to x11 server: {err}"))?
     .reply()
-    .map_err(|err| {
-        format!(
-            "xkb_per_client_flags request to x11 server has failed: {}",
-            err
-        )
-    })?;
+    .map_err(|err| format!("xkb_per_client_flags request to x11 server has failed: {err}"))?;
 
     let root = conn.setup().roots[screen].root;
 
