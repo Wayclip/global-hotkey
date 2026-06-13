@@ -1,7 +1,7 @@
 [package]
-name = "global-hotkey"
+name = "wayclip-global-hotkey"
 version = "0.7.0"
-description = "Global hotkeys for Desktop Applications | Fork"
+description = "Global hotkeys for Desktop Applications | Wayclip Fork"
 edition = "2021"
 keywords = ["windowing", "global", "global-hotkey", "hotkey"]
 license = "Apache-2.0 OR MIT"
