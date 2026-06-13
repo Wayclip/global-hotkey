@@ -5,8 +5,8 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use ashpd::desktop::global_shortcuts::{GlobalShortcuts, NewShortcut};
-use ashpd::desktop::Session;
+use ashpd::desktop::global_shortcuts::{BindShortcutsOptions, GlobalShortcuts, NewShortcut};
+use ashpd::desktop::{CreateSessionOptions, Session};
 use ashpd::AppID;
 use crossbeam_channel::{unbounded, Receiver, Select, Sender};
 use futures::{Stream, StreamExt};
@@ -21,9 +21,9 @@ enum GSEvent {
     Deactivated(ashpd::desktop::global_shortcuts::Deactivated),
 }
 
-struct GlobalShortcutsState<'a> {
-    proxy: GlobalShortcuts<'a>,
-    session: Session<'a, GlobalShortcuts<'a>>,
+struct GlobalShortcutsState {
+    proxy: GlobalShortcuts,
+    session: Session<GlobalShortcuts>,
 }
 
 fn resolve_app_id() -> String {
@@ -32,7 +32,7 @@ fn resolve_app_id() -> String {
         .unwrap_or_else(|_| "com.global-hotkey.app".to_string())
 }
 
-impl GlobalShortcutsState<'_> {
+impl GlobalShortcutsState {
     async fn new(app_id: &str, event_sender: Sender<GSEvent>) -> Result<Self, String> {
         match AppID::from_str(app_id) {
             Ok(app_id) => {
@@ -52,7 +52,7 @@ impl GlobalShortcutsState<'_> {
             .map_err(|e| format!("Failed to start global shortcuts portal proxy: {e}"))?;
 
         let session = proxy
-            .create_session()
+            .create_session(CreateSessionOptions::default())
             .await
             .map_err(|e| format!("Failed to start global shortcuts portal session: {e}"))?;
 
@@ -68,7 +68,7 @@ impl GlobalShortcutsState<'_> {
     }
 
     async fn get_event_stream(
-        proxy: &GlobalShortcuts<'_>,
+        proxy: &GlobalShortcuts,
     ) -> Result<Box<dyn Stream<Item = GSEvent> + Unpin + Send>, String> {
         let activated: Box<dyn Stream<Item = GSEvent> + Unpin + Send> = Box::new(
             proxy
@@ -90,18 +90,22 @@ impl GlobalShortcutsState<'_> {
 }
 
 async fn rebind_all(
-    gs_state: &mut GlobalShortcutsState<'_>,
+    gs_state: &mut GlobalShortcutsState,
     registered_hotkeys: &HashMap<u32, HotKey>,
 ) -> Result<(), Error> {
     gs_state.session.close().await.map_err(|e| {
         Error::FailedToRegister(format!("Failed to close old global shortcuts session: {e}"))
     })?;
 
-    gs_state.session = gs_state.proxy.create_session().await.map_err(|e| {
-        Error::FailedToRegister(format!(
-            "Failed to start global shortcuts portal session: {e}"
-        ))
-    })?;
+    gs_state.session = gs_state
+        .proxy
+        .create_session(CreateSessionOptions::default())
+        .await
+        .map_err(|e| {
+            Error::FailedToRegister(format!(
+                "Failed to start global shortcuts portal session: {e}"
+            ))
+        })?;
 
     let shortcuts: Vec<NewShortcut> = registered_hotkeys
         .iter()
@@ -115,7 +119,12 @@ async fn rebind_all(
     // https://gitlab.gnome.org/GNOME/xdg-desktop-portal-gnome/-/issues/177
     let _ = gs_state
         .proxy
-        .bind_shortcuts(&gs_state.session, &shortcuts, None)
+        .bind_shortcuts(
+            &gs_state.session,
+            &shortcuts,
+            None,
+            BindShortcutsOptions::default(),
+        )
         .await
         .map(|r| r.response());
 
@@ -240,7 +249,7 @@ async fn events_processor_async(thread_rx: Receiver<ThreadMessage>) -> Result<()
 }
 
 async fn ensure_state_and_rebind(
-    gs_state: &mut Option<GlobalShortcutsState<'_>>,
+    gs_state: &mut Option<GlobalShortcutsState>,
     app_id: &str,
     gs_event_sender: &Sender<GSEvent>,
     registered_hotkeys: &HashMap<u32, HotKey>,

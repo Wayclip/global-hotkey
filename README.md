@@ -27,6 +27,15 @@ Set the `GLOBAL_HOTKEY_APP_ID` environment variable to your application's ID for
 - On Linux (Wayland), a tokio multi-thread runtime is used internally for the D-Bus event loop.
 - On Linux (X11), no special event loop requirements.
 
+## Feature Flags
+
+| Feature Flag | Description                     | Default |
+| ------------ | ------------------------------- | ------- |
+| `tokio`      | Use tokio `async` runtime       | Yes     |
+| `async-io`   | Use the `async-io` runtime      | No      |
+| `serde`      | Serialisation & Deserialisation | No      |
+| `tracing`    | Diagnostic Infromation          | No      |
+
 ## Example
 
 ```rs
